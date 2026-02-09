@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Problematique Map — Interactive</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Playfair+Display:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0b10;
+    font-family: 'Inter', -apple-system, sans-serif;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ===== MODE TOGGLE (bottom-left) ===== */
+  .mode-toggle {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    z-index: 200;
+    background: rgba(12,13,20,0.75);
+    backdrop-filter: blur(24px) saturate(1.4);
+    padding: 6px 8px;
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.06);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    transition: opacity 0.4s, transform 0.4s;
+  }
+  .mode-toggle button {
+    background: transparent;
+    border: 1px solid transparent;
+    color: #636e80;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 8px 18px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+  .mode-toggle button:hover {
+    color: #c8d0dc;
+    background: rgba(255,255,255,0.05);
+  }
+  .mode-toggle button.active {
+    background: rgba(99,102,241,0.15);
+    border-color: rgba(99,102,241,0.25);
+    color: #a5b4fc;
+    box-shadow: 0 0 20px rgba(99,102,241,0.1);
+  }
+
+  /* Progress dots (top-center, only visible during presentation) */
+  .progress-bar {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 200;
+    background: rgba(12,13,20,0.7);
+    backdrop-filter: blur(20px) saturate(1.3);
+    padding: 10px 18px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.06);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.35);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s, transform 0.4s;
+  }
+  .progress-bar.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .step-indicator {
+    color: #636e80;
+    font-size: 0.65rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+  }
+  .progress-dots {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+  }
+  .progress-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.08);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .progress-dot.active {
+    background: #6366f1;
+    box-shadow: 0 0 8px rgba(99,102,241,0.5);
+  }
+  .progress-dot.completed {
+    background: rgba(99,102,241,0.4);
+  }
+
+  /* Hide UI in presentation mode */
+  body.presenting .mode-toggle,
+  body.presenting .legend,
+  body.presenting .keyboard-hint,
+  body.presenting .reset-zoom {
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+
+  /* ===== VIEWPORT ===== */
+  .viewport {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    position: relative;
+    cursor: grab;
+  }
+  .viewport:active { cursor: grabbing; }
+  .viewport.presenting { cursor: default; }
+
+  /* ===== CANVAS ===== */
+  .canvas {
+    position: absolute;
+    width: 1500px;
+    height: 950px;
+    transform-origin: 0 0;
+    transition: transform 0.8s cubic-bezier(0.22, 0.61, 0.36, 1);
+    will-change: transform;
+  }
+
+  /* Background layers */
+  .canvas-bg {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(160deg, #0e1018 0%, #151827 40%, #12141f 70%, #0e1018 100%);
+    z-index: 0;
+  }
+  .canvas-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(255,255,255,0.025) 1px, transparent 0);
+    background-size: 48px 48px;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  /* Ambient glow orbs */
+  .orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(120px);
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0;
+    animation: fadeInOrb 2s ease forwards;
+  }
+  .orb-1 {
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, rgba(99,102,241,0.12), transparent 70%);
+    top: -50px; left: 100px;
+    animation-delay: 0.3s;
+  }
+  .orb-2 {
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(220,38,38,0.1), transparent 70%);
+    top: 250px; left: 450px;
+    animation-delay: 0.6s;
+  }
+  .orb-3 {
+    width: 450px; height: 450px;
+    background: radial-gradient(circle, rgba(16,185,129,0.08), transparent 70%);
+    top: 400px; right: 100px;
+    animation-delay: 0.9s;
+  }
+  @keyframes fadeInOrb {
+    to { opacity: 1; }
+  }
+
+  /* ===== TITLE ===== */
+  .title-area {
+    position: absolute;
+    top: 18px;
+    left: 750px;
+    transform: translateX(-50%);
+    text-align: center;
+    z-index: 5;
+    pointer-events: none;
+  }
+  .title-area h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: rgba(226,232,240,0.6);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .title-area p {
+    font-size: 0.7rem;
+    color: rgba(100,116,139,0.6);
+    margin-top: 4px;
+    font-style: italic;
+    font-weight: 400;
+  }
+
+  /* ===== SVG ARROWS ===== */
+  svg.arrows {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .arrow-path {
+    fill: none;
+    stroke-width: 1.8;
+    opacity: 0;
+    transition: opacity 0.6s ease, stroke-width 0.6s ease, filter 0.6s ease;
+    stroke-linecap: round;
+    animation: arrowEnter 0.8s ease forwards;
+    animation-delay: 0.9s;
+  }
+  @keyframes arrowEnter {
+    to { opacity: 0.35; }
+  }
+  .arrow-path[data-type="focal"] {
+    stroke-width: 2.8;
+    opacity: 0.55;
+  }
+  .arrow-path[data-type="direct"] {
+    stroke-width: 2.2;
+    opacity: 0.4;
+  }
+  .arrow-path.dimmed {
+    opacity: 0.04 !important;
+    stroke-width: 1 !important;
+  }
+  .arrow-path.highlighted {
+    opacity: 1 !important;
+    stroke-width: 3 !important;
+    filter: drop-shadow(0 0 8px var(--arrow-color));
+    stroke-dasharray: 10 5;
+    animation: arrowFlow 0.7s linear infinite;
+  }
+  .arrow-path[data-type="focal"].highlighted {
+    stroke-width: 4 !important;
+  }
+  @keyframes arrowFlow {
+    to { stroke-dashoffset: -15; }
+  }
+
+  /* ===== NODES ===== */
+  .node {
+    position: absolute;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.72rem;
+    line-height: 1.35;
+    padding: 10px 14px;
+    z-index: 2;
+    transition:
+      transform 0.5s cubic-bezier(0.22, 0.61, 0.36, 1),
+      box-shadow 0.5s ease,
+      opacity 0.5s ease,
+      filter 0.5s ease;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    user-select: none;
+    opacity: 0;
+    animation: nodeEnter 0.6s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  }
+  .node:hover {
+    transform: scale(1.08) translateY(-3px);
+    z-index: 10;
+  }
+  .node.dimmed {
+    opacity: 0.1 !important;
+    filter: grayscale(0.9) brightness(0.5);
+  }
+  .node.highlighted {
+    z-index: 12;
+    transform: scale(1.1);
+  }
+  @keyframes nodeEnter {
+    from { opacity: 0; transform: scale(0.8); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  /* Node types */
+  .node.focal {
+    width: 250px;
+    height: 96px;
+    background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 800;
+    border-radius: 22px;
+    border: 2px solid rgba(255,255,255,0.2);
+    box-shadow:
+      0 0 60px rgba(239,68,68,0.25),
+      0 0 120px rgba(239,68,68,0.1),
+      0 12px 40px rgba(0,0,0,0.4);
+    z-index: 3;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    animation: nodeEnter 0.6s cubic-bezier(0.22, 0.61, 0.36, 1) forwards,
+               focalPulse 3s ease-in-out infinite 1.5s;
+    letter-spacing: 0;
+  }
+  .node.focal.highlighted {
+    box-shadow:
+      0 0 80px rgba(239,68,68,0.4),
+      0 0 160px rgba(239,68,68,0.15),
+      0 16px 50px rgba(0,0,0,0.5);
+  }
+  @keyframes focalPulse {
+    0%, 100% { box-shadow: 0 0 60px rgba(239,68,68,0.25), 0 0 120px rgba(239,68,68,0.1), 0 12px 40px rgba(0,0,0,0.4); }
+    50% { box-shadow: 0 0 80px rgba(239,68,68,0.35), 0 0 150px rgba(239,68,68,0.15), 0 12px 40px rgba(0,0,0,0.4); }
+  }
+
+  .node.root {
+    width: 170px;
+    height: 66px;
+    background: linear-gradient(135deg, #3730a3 0%, #1e1b4b 100%);
+    color: #c7d2fe;
+    border: 1px solid rgba(99,102,241,0.2);
+    box-shadow: 0 4px 24px rgba(55,48,163,0.3), 0 0 40px rgba(55,48,163,0.08);
+  }
+  .node.root.highlighted {
+    box-shadow: 0 0 50px rgba(99,102,241,0.4), 0 0 80px rgba(99,102,241,0.15);
+    color: #e0e7ff;
+    border-color: rgba(99,102,241,0.4);
+  }
+
+  .node.mediating {
+    width: 190px;
+    height: 66px;
+    background: linear-gradient(135deg, #c2410c 0%, #7c2d12 100%);
+    color: #fed7aa;
+    border: 1px solid rgba(251,146,60,0.2);
+    box-shadow: 0 4px 24px rgba(194,65,12,0.25), 0 0 40px rgba(194,65,12,0.06);
+  }
+  .node.mediating.highlighted {
+    box-shadow: 0 0 50px rgba(234,88,12,0.4), 0 0 80px rgba(234,88,12,0.12);
+    color: #fff;
+    border-color: rgba(251,146,60,0.4);
+  }
+
+  .node.direct {
+    width: 176px;
+    height: 66px;
+    background: linear-gradient(135deg, #047857 0%, #064e3b 100%);
+    color: #a7f3d0;
+    border: 1px solid rgba(16,185,129,0.2);
+    box-shadow: 0 4px 24px rgba(4,120,87,0.25), 0 0 40px rgba(4,120,87,0.06);
+  }
+  .node.direct.highlighted {
+    box-shadow: 0 0 50px rgba(16,185,129,0.4), 0 0 80px rgba(16,185,129,0.1);
+    color: #d1fae5;
+    border-color: rgba(16,185,129,0.4);
+  }
+
+  /* Stagger node entrance */
+  .node:nth-child(1) { animation-delay: 0.1s; }
+  .node:nth-child(2) { animation-delay: 0.15s; }
+  .node:nth-child(3) { animation-delay: 0.2s; }
+  .node:nth-child(4) { animation-delay: 0.25s; }
+  .node:nth-child(5) { animation-delay: 0.3s; }
+  .node:nth-child(6) { animation-delay: 0.35s; }
+  .node:nth-child(7) { animation-delay: 0.4s; }
+  .node:nth-child(8) { animation-delay: 0.45s; }
+  .node:nth-child(9) { animation-delay: 0.5s; }
+  .node:nth-child(10) { animation-delay: 0.55s; }
+  .node:nth-child(11) { animation-delay: 0.6s; }
+  .node:nth-child(12) { animation-delay: 0.65s; }
+  .node:nth-child(13) { animation-delay: 0.7s; }
+
+  /* ===== LEGEND ===== */
+  .legend {
+    position: fixed;
+    bottom: 24px;
+    left: 24px;
+    background: rgba(12,13,20,0.85);
+    backdrop-filter: blur(20px) saturate(1.3);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 16px;
+    padding: 16px 20px;
+    font-size: 0.65rem;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    transition: opacity 0.4s, transform 0.4s;
+  }
+  .legend.collapsed {
+    padding: 10px 16px;
+    gap: 0;
+  }
+  .legend-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+    gap: 12px;
+  }
+  .legend-toggle {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.04);
+    color: #636e80;
+    font-size: 0.55rem;
+    transition: background 0.2s, transform 0.3s;
+    flex-shrink: 0;
+  }
+  .legend-header:hover .legend-toggle {
+    background: rgba(255,255,255,0.08);
+    color: #8a96a8;
+  }
+  .legend.collapsed .legend-toggle {
+    transform: rotate(-90deg);
+  }
+  .legend-body {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    overflow: hidden;
+    max-height: 300px;
+    transition: max-height 0.35s ease, opacity 0.25s ease, margin-top 0.3s ease;
+    opacity: 1;
+    margin-top: 2px;
+  }
+  .legend.collapsed .legend-body {
+    max-height: 0;
+    opacity: 0;
+    margin-top: 0;
+  }
+  .legend-title {
+    font-weight: 700;
+    font-size: 0.6rem;
+    color: #636e80;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    margin-bottom: 0;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #7a8599;
+  }
+  .legend-color {
+    width: 14px;
+    height: 14px;
+    border-radius: 5px;
+    flex-shrink: 0;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .legend-line {
+    width: 22px;
+    height: 2.5px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .legend-divider {
+    height: 1px;
+    background: rgba(255,255,255,0.04);
+    margin: 2px 0;
+  }
+
+  /* ===== NARRATION PANEL (bottom-center bar) ===== */
+  .narration {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    width: 680px;
+    max-width: calc(100vw - 48px);
+    background: rgba(10,11,16,0.92);
+    backdrop-filter: blur(24px) saturate(1.4);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 20px;
+    padding: 20px 28px 18px;
+    z-index: 150;
+    opacity: 0;
+    transition: opacity 0.5s cubic-bezier(0.22, 0.61, 0.36, 1),
+                transform 0.5s cubic-bezier(0.22, 0.61, 0.36, 1);
+    pointer-events: none;
+    box-shadow: 0 16px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
+  }
+  .narration.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+    pointer-events: auto;
+  }
+  .narration-header {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 10px;
+  }
+  .narration-step {
+    font-size: 0.58rem;
+    font-weight: 700;
+    color: #6366f1;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .narration-title {
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #e8ecf2;
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+  }
+  .narration-text {
+    font-size: 0.75rem;
+    color: #8694a8;
+    line-height: 1.65;
+    font-weight: 400;
+  }
+  .narration-text em {
+    color: #c7d2fe;
+    font-style: normal;
+    font-weight: 600;
+    background: rgba(99,102,241,0.1);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+  .nav-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+    justify-content: flex-end;
+  }
+  .nav-buttons button {
+    padding: 9px 28px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.04);
+    color: #636e80;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    letter-spacing: 0.02em;
+  }
+  .nav-buttons button:hover {
+    background: rgba(255,255,255,0.08);
+    color: #c8d0dc;
+    border-color: rgba(255,255,255,0.1);
+  }
+  .nav-buttons button.primary {
+    background: linear-gradient(135deg, rgba(99,102,241,0.25), rgba(99,102,241,0.15));
+    border-color: rgba(99,102,241,0.3);
+    color: #a5b4fc;
+  }
+  .nav-buttons button.primary:hover {
+    background: linear-gradient(135deg, rgba(99,102,241,0.35), rgba(99,102,241,0.2));
+    box-shadow: 0 0 20px rgba(99,102,241,0.15);
+  }
+
+  /* ===== TOOLTIP ===== */
+  .tooltip-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 120;
+    pointer-events: none;
+  }
+  .tooltip-overlay.active { pointer-events: auto; }
+
+  .zoom-tooltip {
+    position: absolute;
+    background: rgba(12,13,20,0.92);
+    backdrop-filter: blur(20px) saturate(1.3);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    padding: 20px 24px;
+    z-index: 130;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.35s, transform 0.35s cubic-bezier(0.22, 0.61, 0.36, 1);
+    max-width: 300px;
+    transform: translateY(8px);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  }
+  .zoom-tooltip.visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
+  .zoom-tooltip-badge {
+    display: inline-block;
+    font-size: 0.55rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    padding: 3px 8px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+  }
+  .zoom-tooltip-badge.type-focal { background: rgba(239,68,68,0.2); color: #fca5a5; }
+  .zoom-tooltip-badge.type-root { background: rgba(99,102,241,0.2); color: #a5b4fc; }
+  .zoom-tooltip-badge.type-mediating { background: rgba(251,146,60,0.2); color: #fed7aa; }
+  .zoom-tooltip-badge.type-direct { background: rgba(16,185,129,0.2); color: #6ee7b7; }
+
+  .zoom-tooltip-title {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #e8ecf2;
+    margin-bottom: 8px;
+    letter-spacing: -0.01em;
+  }
+  .zoom-tooltip-desc {
+    font-size: 0.72rem;
+    color: #8694a8;
+    line-height: 1.65;
+  }
+  .zoom-tooltip-close {
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    background: none;
+    border: none;
+    color: #475569;
+    cursor: pointer;
+    font-size: 1.1rem;
+    line-height: 1;
+    transition: color 0.2s;
+    padding: 4px;
+  }
+  .zoom-tooltip-close:hover { color: #94a3b8; }
+
+  /* ===== RESET BUTTON ===== */
+  .reset-zoom {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 190;
+    background: rgba(12,13,20,0.8);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: #7a8599;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 8px 18px;
+    border-radius: 10px;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+    letter-spacing: 0.02em;
+  }
+  .reset-zoom.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .reset-zoom:hover {
+    background: rgba(20,22,35,0.9);
+    color: #c8d0dc;
+    border-color: rgba(255,255,255,0.12);
+  }
+
+  /* ===== KEYBOARD HINT ===== */
+  .keyboard-hint {
+    position: fixed;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #2a3040;
+    font-size: 0.6rem;
+    font-weight: 500;
+    z-index: 90;
+    letter-spacing: 0.04em;
+    transition: opacity 0.4s;
+    pointer-events: none;
+  }
+  .keyboard-hint kbd {
+    display: inline-block;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.55rem;
+    margin: 0 2px;
+    color: #3a4050;
+  }
+
+  /* Group info */
+  .group-info {
+    position: absolute;
+    top: 22px;
+    right: 30px;
+    text-align: right;
+    z-index: 5;
+    color: rgba(51,65,85,0.4);
+    font-size: 0.58rem;
+    line-height: 1.5;
+    pointer-events: none;
+    letter-spacing: 0.02em;
+  }
+</style>
+</head>
+<body>
+
+<!-- Mode toggle (bottom-right) -->
+<div class="mode-toggle" id="modeToggle">
+  <button id="btnFree" class="active" onclick="setMode('free')">Free Explore</button>
+  <button id="btnPresent" onclick="startPresentation()">Presentation Mode</button>
+</div>
+
+<!-- Progress bar (top-center, presentation only) -->
+<div class="progress-bar" id="progressBar">
+  <span class="step-indicator" id="stepIndicator"></span>
+  <div class="progress-dots" id="progressDots"></div>
+</div>
+
+<!-- Reset zoom -->
+<button class="reset-zoom" id="resetZoom" onclick="resetView()">Reset View</button>
+
+<!-- Main viewport -->
+<div class="viewport" id="viewport">
+  <div class="canvas" id="canvas">
+    <div class="canvas-bg"></div>
+    <div class="canvas-grid"></div>
+
+    <!-- Ambient orbs -->
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
+    <div class="title-area">
+      <h2>Problematique Map</h2>
+      <p>"Mga Anak ng Pugad Lawin" — Kara David</p>
+    </div>
+
+    <div class="group-info">
+      DEVC 10 — Module 2<br>Exercise 1B
+    </div>
+
+    <!-- SVG Arrows (rendered by JS) -->
+    <svg class="arrows" id="arrowsSvg" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="ah-indigo" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><polygon points="0 0.5, 9 4, 0 7.5" fill="#818cf8" opacity="0.85"/></marker>
+        <marker id="ah-orange" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><polygon points="0 0.5, 9 4, 0 7.5" fill="#fb923c" opacity="0.85"/></marker>
+        <marker id="ah-green" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><polygon points="0 0.5, 9 4, 0 7.5" fill="#6ee7b7" opacity="0.85"/></marker>
+        <marker id="ah-red" markerWidth="11" markerHeight="9" refX="10" refY="4.5" orient="auto"><polygon points="0 0.5, 10 4.5, 0 8.5" fill="#f87171" opacity="0.95"/></marker>
+
+        <marker id="ah-indigo-hl" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto"><polygon points="0 0.5, 11 5, 0 9.5" fill="#a5b4fc"/></marker>
+        <marker id="ah-orange-hl" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto"><polygon points="0 0.5, 11 5, 0 9.5" fill="#fdba74"/></marker>
+        <marker id="ah-green-hl" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto"><polygon points="0 0.5, 11 5, 0 9.5" fill="#86efac"/></marker>
+        <marker id="ah-red-hl" markerWidth="14" markerHeight="11" refX="13" refY="5.5" orient="auto"><polygon points="0 0.5, 13 5.5, 0 10.5" fill="#fca5a5"/></marker>
+      </defs>
+    </svg>
+
+    <!-- NODES -->
+    <div class="node focal"     data-id="focal"     data-type="focal"     style="left:625px; top:410px;">Continuous Cycle of<br>Children's Death<br>in Pugad Lawin</div>
+
+    <div class="node root"      data-id="poverty"   data-type="root"      style="left:40px;  top:430px;">Poverty</div>
+    <div class="node root"      data-id="geo"       data-type="root"      style="left:1290px;top:430px;">Geographic<br>Isolation</div>
+    <div class="node root"      data-id="econ"      data-type="root"      style="left:355px; top:840px;">Lack of Economic<br>Opportunities</div>
+    <div class="node root"      data-id="gov"       data-type="root"      style="left:970px; top:840px;">Weak Government<br>Support</div>
+
+    <div class="node mediating" data-id="income"    data-type="mediating" style="left:50px;  top:200px;">Insufficient Income /<br>Financial Instability</div>
+    <div class="node mediating" data-id="edu"       data-type="mediating" style="left:580px; top:75px; width:250px;">Limited Health &<br>Family Planning Education</div>
+    <div class="node mediating" data-id="informal"  data-type="mediating" style="left:1260px;top:200px;">Living in Informal<br>Settlements</div>
+    <div class="node mediating" data-id="food"      data-type="mediating" style="left:55px;  top:640px; width:165px;">Food Scarcity</div>
+    <div class="node mediating" data-id="sanitation" data-type="mediating" style="left:1250px;top:640px; width:200px;">Poor Environmental<br>Sanitation</div>
+
+    <div class="node direct"    data-id="malnut"    data-type="direct"    style="left:345px; top:280px;">Children's<br>Malnutrition</div>
+    <div class="node direct"    data-id="immune"    data-type="direct"    style="left:985px; top:280px;">Weak Immune<br>System</div>
+    <div class="node direct"    data-id="autonomy"  data-type="direct"    style="left:985px; top:570px;">Loss of Physical<br>Autonomy</div>
+  </div>
+</div>
+
+<!-- Legend -->
+<div class="legend collapsed" id="legend">
+  <div class="legend-header" onclick="document.getElementById('legend').classList.toggle('collapsed')">
+    <div class="legend-title">Legend</div>
+    <div class="legend-toggle">&#9660;</div>
+  </div>
+  <div class="legend-body">
+    <div class="legend-item"><div class="legend-color" style="background:linear-gradient(135deg,#ef4444,#b91c1c);"></div><span>Focal Problem</span></div>
+    <div class="legend-item"><div class="legend-color" style="background:linear-gradient(135deg,#3730a3,#1e1b4b);"></div><span>Root Causes</span></div>
+    <div class="legend-item"><div class="legend-color" style="background:linear-gradient(135deg,#c2410c,#7c2d12);"></div><span>Mediating Factors</span></div>
+    <div class="legend-item"><div class="legend-color" style="background:linear-gradient(135deg,#047857,#064e3b);"></div><span>Direct Effects</span></div>
+    <div class="legend-divider"></div>
+    <div class="legend-item"><div class="legend-line" style="background:#818cf8;"></div><span>Root cause link</span></div>
+    <div class="legend-item"><div class="legend-line" style="background:#fb923c;"></div><span>Mediating link</span></div>
+    <div class="legend-item"><div class="legend-line" style="background:#6ee7b7;"></div><span>Direct effect link</span></div>
+    <div class="legend-item"><div class="legend-line" style="background:#f87171; height:3.5px;"></div><span>To focal problem</span></div>
+  </div>
+</div>
+
+<!-- Narration panel (bottom-center) -->
+<div class="narration" id="narration">
+  <div class="narration-header">
+    <div class="narration-step" id="narrationStep"></div>
+    <div class="narration-title" id="narrationTitle"></div>
+  </div>
+  <div class="narration-text" id="narrationText"></div>
+  <div class="nav-buttons">
+    <button onclick="prevStep()">Back</button>
+    <button class="primary" onclick="nextStep()">Next</button>
+  </div>
+</div>
+
+<!-- Tooltip overlay -->
+<div class="tooltip-overlay" id="tooltipOverlay" onclick="closeTooltip()">
+  <div class="zoom-tooltip" id="zoomTooltip" onclick="event.stopPropagation()">
+    <button class="zoom-tooltip-close" onclick="closeTooltip()">&times;</button>
+    <div class="zoom-tooltip-badge" id="tooltipBadge"></div>
+    <div class="zoom-tooltip-title" id="tooltipTitle"></div>
+    <div class="zoom-tooltip-desc" id="tooltipDesc"></div>
+  </div>
+</div>
+
+<!-- Keyboard hint -->
+<div class="keyboard-hint" id="keyboardHint">
+  <kbd>Space</kbd> / <kbd>&rarr;</kbd> Next &nbsp;&nbsp;
+  <kbd>&larr;</kbd> Back &nbsp;&nbsp;
+  <kbd>Esc</kbd> Reset &nbsp;&nbsp;
+  Scroll to zoom &middot; Drag to pan
+</div>
+
+<script>
+// ===== DOM REFS =====
+const canvas = document.getElementById('canvas');
+const viewport = document.getElementById('viewport');
+const arrowsSvg = document.getElementById('arrowsSvg');
+const narration = document.getElementById('narration');
+const resetBtn = document.getElementById('resetZoom');
+const tooltipOverlay = document.getElementById('tooltipOverlay');
+const tooltip = document.getElementById('zoomTooltip');
+const progressDotsEl = document.getElementById('progressDots');
+const nodes = document.querySelectorAll('.node');
+
+let mode = 'free';
+let currentStep = -1;
+let baseTransform = { x: 0, y: 0, scale: 1 };
+let currentTransform = { x: 0, y: 0, scale: 1 };
+let isPanning = false;
+let panStart = { x: 0, y: 0 };
+let panStartTransform = { x: 0, y: 0 };
+let isAnimating = false;
+
+// ===== NODE INFO =====
+const nodeInfo = {
+  focal:    { title: "Focal Problem", type: "focal", desc: "This is the heart of the problem — children in Pugad Lawin keep dying, and it happens over and over again. Kids like Ashley lose their lives to things that should be preventable, all because the system around them has failed." },
+  poverty:  { title: "Poverty", type: "root", desc: "Everything starts here. The families in Pugad Lawin are extremely poor — we're talking about not being able to put food on the table, see a doctor, or even have a proper roof over their heads." },
+  geo:      { title: "Geographic Isolation", type: "root", desc: "Pugad Lawin is tucked away in a place that's really hard to get to. Because of that, the people there are cut off from hospitals, government programs, and any real chance at a livelihood." },
+  gov:      { title: "Weak Government Support", type: "root", desc: "The government barely reaches this community. There are no feeding programs, no proper health centers nearby, and the infrastructure is almost nonexistent." },
+  econ:     { title: "Lack of Economic Opportunities", type: "root", desc: "There's simply no steady work available. Parents can't find decent jobs, so the poverty just keeps going in circles with no way out." },
+  income:   { title: "Insufficient Income", type: "mediating", desc: "With no real jobs and deep poverty, these families barely scrape by. What little they earn isn't nearly enough for nutritious food or a trip to the doctor." },
+  edu:      { title: "Limited Health & Family Planning Education", type: "mediating", desc: "Many parents don't have access to information about proper child nutrition, hygiene, or family planning. They end up with large families they struggle to feed and care for." },
+  informal: { title: "Living in Informal Settlements", type: "mediating", desc: "These families live in makeshift homes — no clean water, no proper toilets, no real protection from the elements. It's not a safe place to raise children." },
+  sanitation:{ title: "Poor Environmental Sanitation", type: "mediating", desc: "The surroundings are unsanitary — open sewage, dirty water, trash everywhere. For children who are already malnourished, this kind of environment is a death trap." },
+  food:     { title: "Food Scarcity", type: "mediating", desc: "There's just not enough food to go around. Children often eat last, and when they do eat, the meals have little to no nutritional value." },
+  malnut:   { title: "Children's Malnutrition", type: "direct", desc: "This is what happens when kids don't get enough to eat. Ashley, for example, is five years old but she's skin and bones — her body simply can't grow the way it should." },
+  immune:   { title: "Weak Immune System", type: "direct", desc: "When you combine malnutrition with dirty living conditions, children's bodies can't fight back. Even a simple fever or cough can turn deadly." },
+  autonomy: { title: "Loss of Physical Autonomy", type: "direct", desc: "Children like Ashley are so weak they can't walk, play, or do anything on their own. Her mother has to carry her everywhere she goes, every single day." }
+};
+
+// ===== CONNECTIONS =====
+const connections = [
+  // Root cause links (indigo)
+  { from: 'poverty', to: 'income',     type: 'root',      curve: 0.18 },
+  { from: 'poverty', to: 'food',       type: 'root',      curve: -0.18 },
+  { from: 'poverty', to: 'econ',       type: 'root',      curve: 0.12 },
+  { from: 'econ',    to: 'income',     type: 'root',      curve: -0.12 },
+  { from: 'econ',    to: 'food',       type: 'root',      curve: 0.15 },
+  { from: 'geo',     to: 'informal',   type: 'root',      curve: -0.18 },
+  { from: 'geo',     to: 'gov',        type: 'root',      curve: -0.12 },
+  { from: 'geo',     to: 'sanitation', type: 'root',      curve: 0.18 },
+  { from: 'gov',     to: 'econ',       type: 'root',      curve: 0.08 },
+  // Mediating links (orange)
+  { from: 'income',    to: 'food',       type: 'mediating', curve: -0.22 },
+  { from: 'income',    to: 'malnut',     type: 'mediating', curve: 0.08 },
+  { from: 'income',    to: 'edu',        type: 'mediating', curve: 0.12 },
+  { from: 'food',      to: 'malnut',     type: 'mediating', curve: 0.2 },
+  { from: 'edu',       to: 'malnut',     type: 'mediating', curve: -0.08 },
+  { from: 'edu',       to: 'sanitation', type: 'mediating', curve: 0.1 },
+  { from: 'informal',  to: 'sanitation', type: 'mediating', curve: 0.2 },
+  { from: 'informal',  to: 'immune',     type: 'mediating', curve: -0.08 },
+  { from: 'sanitation', to: 'immune',    type: 'mediating', curve: -0.2 },
+  { from: 'sanitation', to: 'autonomy',  type: 'mediating', curve: 0.08 },
+  // Direct effect links (green)
+  { from: 'malnut',   to: 'immune',     type: 'direct',    curve: 0.12 },
+  { from: 'malnut',   to: 'autonomy',   type: 'direct',    curve: -0.08 },
+  // To focal (red)
+  { from: 'malnut',   to: 'focal',      type: 'focal',     curve: 0.06 },
+  { from: 'immune',   to: 'focal',      type: 'focal',     curve: -0.06 },
+  { from: 'autonomy', to: 'focal',      type: 'focal',     curve: -0.08 },
+];
+
+const arrowColors = {
+  root: '#818cf8',
+  mediating: '#fb923c',
+  direct: '#6ee7b7',
+  focal: '#f87171'
+};
+const arrowMarkers = {
+  root: 'ah-indigo',
+  mediating: 'ah-orange',
+  direct: 'ah-green',
+  focal: 'ah-red'
+};
+const arrowMarkersHl = {
+  root: 'ah-indigo-hl',
+  mediating: 'ah-orange-hl',
+  direct: 'ah-green-hl',
+  focal: 'ah-red-hl'
+};
+
+// ===== PRESENTATION STEPS =====
+const steps = [
+  {
+    step: "Introduction",
+    title: "The Documentary",
+    text: "Ang documentary na pinag-aralan namin ay <em>\"Mga Anak ng Pugad Lawin\"</em> ni Kara David. Tungkol ito sa mga pamilya sa isang liblib na komunidad — kung saan paulit-ulit na namamatay ang mga bata dahil sa mga problemang dapat sana ay nasosolusyunan na.",
+    highlight: ["focal"],
+    arrows: [],
+    focus: { x: 750, y: 460, scale: 1.8 }
+  },
+  {
+    step: "Step 1 of 5",
+    title: "Root Causes — Ang Pinakaugat",
+    text: "Simulan natin sa pinakaugat ng problema. Ang <em>Poverty</em> talaga ang simula ng lahat. Dagdag pa, dahil sa <em>Geographic Isolation</em>, halos hindi naaabot ng tulong ang komunidad. Tapos ang <em>Weak Government Support</em> at <em>Lack of Economic Opportunities</em> — parang walang way out para sa kanila.",
+    highlight: ["poverty", "geo", "gov", "econ"],
+    arrows: ["poverty-income", "poverty-food", "poverty-econ", "geo-informal", "geo-gov", "geo-sanitation", "gov-econ"],
+    focus: { x: 750, y: 560, scale: 0.82 }
+  },
+  {
+    step: "Step 2 of 5",
+    title: "Mediating Factors — Ang Tulay",
+    text: "Ngayon, dahil sobrang hirap na nga, ang mga pamilya ay may <em>Insufficient Income</em> at dumadanas ng <em>Food Scarcity</em>. Nakatira pa sila sa <em>Informal Settlements</em> na walang maayos na tubig o banyo — kaya grabe ang <em>Poor Sanitation</em>. At dahil kulang din ang <em>education sa health at family planning</em>, lalong lumalala ang sitwasyon.",
+    highlight: ["income", "food", "edu", "informal", "sanitation"],
+    arrows: ["income-food", "income-malnut", "income-edu", "food-malnut", "edu-malnut", "edu-sanitation", "informal-sanitation", "informal-immune", "sanitation-immune", "sanitation-autonomy"],
+    focus: { x: 750, y: 400, scale: 0.95 }
+  },
+  {
+    step: "Step 3 of 5",
+    title: "Direct Effects — Sa mga Bata",
+    text: "At ito na ang pinakamasakit — ang mga bata mismo ang nagdurusa. Si Ashley, limang taon pa lang, pero sobrang payat at hindi na makalakad. Yan ang <em>Children's Malnutrition</em>. Dahil dito, bumababa ang <em>Immune System</em> nila at nawawala ang <em>Physical Autonomy</em> nila. Buhatin na lang siya ng nanay niya araw-araw.",
+    highlight: ["malnut", "immune", "autonomy"],
+    arrows: ["malnut-immune", "malnut-autonomy"],
+    focus: { x: 820, y: 400, scale: 1.25 }
+  },
+  {
+    step: "Step 4 of 5",
+    title: "Papunta sa Focal Problem",
+    text: "Lahat ng tatlong ito — <em>Malnutrition</em>, <em>Weak Immune System</em>, at <em>Loss of Physical Autonomy</em> — nagtuturo sa iisang direksyon: ang <em>paulit-ulit na pagkamatay ng mga bata</em> sa Pugad Lawin. Yan ang focal problem, at dito lahat nag-co-connect.",
+    highlight: ["malnut", "immune", "autonomy", "focal"],
+    arrows: ["malnut-focal", "immune-focal", "autonomy-focal"],
+    focus: { x: 800, y: 430, scale: 1.35 }
+  },
+  {
+    step: "Step 5 of 5",
+    title: "Ang Buong Larawan — Isang Cycle",
+    text: "Kapag tiningnan mo ang buong mapa, makikita mo na hindi ito simpleng problema lang. Lahat ng ito ay <em>magkakakonekta</em> — mula sa kahirapan at isolation, hanggang sa malnutrition at kamatayan. Ang bawat problema ay <em>nagpapalala sa isa't isa</em>, at yan ang dahilan kung bakit paulit-ulit itong nangyayari.",
+    highlight: ["focal","poverty","geo","gov","econ","income","food","edu","informal","sanitation","malnut","immune","autonomy"],
+    arrows: "all",
+    focus: { x: 750, y: 560, scale: 0.82 }
+  }
+];
+
+// ===== ARROW RENDERING =====
+function getNodeCenter(id) {
+  const el = document.querySelector(`[data-id="${id}"]`);
+  if (!el) return { x: 0, y: 0, w: 0, h: 0 };
+  return {
+    x: el.offsetLeft + el.offsetWidth / 2,
+    y: el.offsetTop + el.offsetHeight / 2,
+    w: el.offsetWidth,
+    h: el.offsetHeight
+  };
+}
+
+function clipToRect(cx, cy, w, h, tx, ty) {
+  const dx = tx - cx;
+  const dy = ty - cy;
+  if (dx === 0 && dy === 0) return { x: cx, y: cy };
+  const hw = w / 2 + 6;
+  const hh = h / 2 + 6;
+  const scaleX = dx !== 0 ? hw / Math.abs(dx) : Infinity;
+  const scaleY = dy !== 0 ? hh / Math.abs(dy) : Infinity;
+  const scale = Math.min(scaleX, scaleY);
+  return { x: cx + dx * scale, y: cy + dy * scale };
+}
+
+function renderArrows() {
+  // Remove old paths
+  arrowsSvg.querySelectorAll('.arrow-path').forEach(p => p.remove());
+
+  connections.forEach(conn => {
+    const f = getNodeCenter(conn.from);
+    const t = getNodeCenter(conn.to);
+
+    const dx = t.x - f.x;
+    const dy = t.y - f.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len === 0) return;
+
+    // Perpendicular normal
+    const nx = -dy / len;
+    const ny = dx / len;
+
+    // Control point
+    const mx = (f.x + t.x) / 2 + nx * conn.curve * len;
+    const my = (f.y + t.y) / 2 + ny * conn.curve * len;
+
+    // Clip start/end to node edges (toward control point for better tangent)
+    const start = clipToRect(f.x, f.y, f.w, f.h, mx, my);
+    const end = clipToRect(t.x, t.y, t.w, t.h, mx, my);
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', `M ${start.x} ${start.y} Q ${mx} ${my} ${end.x} ${end.y}`);
+    path.setAttribute('stroke', arrowColors[conn.type]);
+    path.setAttribute('data-from', conn.from);
+    path.setAttribute('data-to', conn.to);
+    path.setAttribute('data-type', conn.type);
+    path.setAttribute('style', `marker-end:url(#${arrowMarkers[conn.type]}); --arrow-color: ${arrowColors[conn.type]}`);
+    path.classList.add('arrow-path');
+    arrowsSvg.appendChild(path);
+  });
+}
+
+// ===== VIEW MANAGEMENT =====
+function computeFitTransform() {
+  const vw = viewport.clientWidth;
+  const vh = viewport.clientHeight;
+  const cw = 1500;
+  const ch = 950;
+  const scale = Math.min(vw / cw, vh / ch) * 0.88;
+  const tx = (vw - cw * scale) / 2;
+  const ty = (vh - ch * scale) / 2;
+  return { x: tx, y: ty, scale };
+}
+
+function applyTransform(animate) {
+  if (animate !== false) {
+    canvas.style.transition = 'transform 0.8s cubic-bezier(0.22, 0.61, 0.36, 1)';
+  } else {
+    canvas.style.transition = 'none';
+  }
+  canvas.style.transform = `translate(${currentTransform.x}px, ${currentTransform.y}px) scale(${currentTransform.scale})`;
+}
+
+function resetView() {
+  currentTransform = { ...baseTransform };
+  applyTransform();
+  resetBtn.classList.remove('visible');
+  if (mode === 'free') {
+    closeTooltip();
+    clearHighlights();
+  }
+}
+
+function focusOnPoint(fx, fy, scale, forPresentation) {
+  const vw = viewport.clientWidth;
+  const vh = viewport.clientHeight;
+  // In presentation mode, shift center left & up to account for narration panel
+  let cx = vw / 2;
+  let cy = vh / 2;
+  // No offset needed — narration panel is bottom-center, out of the way
+  const tx = cx - fx * scale;
+  const ty = cy - fy * scale;
+  currentTransform = { x: tx, y: ty, scale };
+  applyTransform();
+  const isDefault = Math.abs(scale - baseTransform.scale) < 0.05 && !forPresentation;
+  resetBtn.classList.toggle('visible', !isDefault);
+}
+
+function zoomToNode(el) {
+  const nx = el.offsetLeft + el.offsetWidth / 2;
+  const ny = el.offsetTop + el.offsetHeight / 2;
+  focusOnPoint(nx, ny, baseTransform.scale * 2.2);
+}
+
+// ===== MODE SWITCHING =====
+function setMode(m) {
+  mode = m;
+  document.getElementById('btnFree').classList.toggle('active', m === 'free');
+  document.getElementById('btnPresent').classList.toggle('active', m === 'present');
+  viewport.classList.toggle('presenting', m === 'present');
+  document.body.classList.toggle('presenting', m === 'present');
+  document.getElementById('progressBar').classList.toggle('visible', m === 'present');
+
+  if (m === 'free') {
+    currentStep = -1;
+    narration.classList.remove('visible');
+    document.getElementById('stepIndicator').textContent = '';
+    updateProgressDots(-1);
+    clearHighlights();
+    resetView();
+  }
+}
+
+function startPresentation() {
+  mode = 'present';
+  document.getElementById('btnFree').classList.remove('active');
+  document.getElementById('btnPresent').classList.add('active');
+  viewport.classList.add('presenting');
+  document.body.classList.add('presenting');
+  document.getElementById('progressBar').classList.add('visible');
+  currentStep = -1;
+  nextStep();
+}
+
+// ===== PROGRESS DOTS =====
+function buildProgressDots() {
+  progressDotsEl.innerHTML = '';
+  steps.forEach((_, i) => {
+    const dot = document.createElement('div');
+    dot.className = 'progress-dot';
+    dot.onclick = () => { if (mode === 'present') { currentStep = i; showStep(i); } };
+    dot.style.cursor = 'pointer';
+    progressDotsEl.appendChild(dot);
+  });
+}
+
+function updateProgressDots(idx) {
+  const dots = progressDotsEl.querySelectorAll('.progress-dot');
+  dots.forEach((d, i) => {
+    d.classList.toggle('active', i === idx);
+    d.classList.toggle('completed', i < idx);
+  });
+}
+
+// ===== STEP NAVIGATION =====
+function nextStep() {
+  if (currentStep < steps.length - 1) {
+    currentStep++;
+    showStep(currentStep);
+  }
+}
+function prevStep() {
+  if (currentStep > 0) {
+    currentStep--;
+    showStep(currentStep);
+  }
+}
+
+function showStep(idx) {
+  const s = steps[idx];
+  closeTooltip();
+
+  document.getElementById('narrationStep').textContent = s.step;
+  document.getElementById('narrationTitle').textContent = s.title;
+  document.getElementById('narrationText').innerHTML = s.text;
+  narration.classList.add('visible');
+  document.getElementById('stepIndicator').textContent = `${idx + 1} / ${steps.length}`;
+  updateProgressDots(idx);
+
+  // Highlight nodes
+  const allArrowPaths = arrowsSvg.querySelectorAll('.arrow-path');
+  nodes.forEach(n => {
+    const id = n.dataset.id;
+    if (s.highlight.includes(id)) {
+      n.classList.add('highlighted');
+      n.classList.remove('dimmed');
+    } else {
+      n.classList.remove('highlighted');
+      n.classList.add('dimmed');
+    }
+  });
+
+  // Highlight arrows
+  allArrowPaths.forEach(a => {
+    const key = a.dataset.from + '-' + a.dataset.to;
+    if (s.arrows === 'all') {
+      a.classList.remove('dimmed');
+      a.classList.add('highlighted');
+      a.style.markerEnd = `url(#${arrowMarkersHl[a.dataset.type]})`;
+    } else if (s.arrows.includes(key)) {
+      a.classList.remove('dimmed');
+      a.classList.add('highlighted');
+      a.style.markerEnd = `url(#${arrowMarkersHl[a.dataset.type]})`;
+    } else {
+      a.classList.add('dimmed');
+      a.classList.remove('highlighted');
+      a.style.markerEnd = `url(#${arrowMarkers[a.dataset.type]})`;
+    }
+  });
+
+  // Camera — offset for narration panel
+  focusOnPoint(s.focus.x, s.focus.y, s.focus.scale * baseTransform.scale, true);
+
+}
+
+function clearHighlights() {
+  nodes.forEach(n => { n.classList.remove('highlighted', 'dimmed'); });
+  arrowsSvg.querySelectorAll('.arrow-path').forEach(a => {
+    a.classList.remove('highlighted', 'dimmed');
+    a.style.markerEnd = `url(#${arrowMarkers[a.dataset.type]})`;
+  });
+}
+
+// ===== NODE CLICK (free mode) =====
+nodes.forEach(node => {
+  node.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (mode !== 'free') return;
+    const id = node.dataset.id;
+    const info = nodeInfo[id];
+    if (!info) return;
+
+    zoomToNode(node);
+
+    // Highlight connected
+    const connectedNodes = new Set([id]);
+    const allArrowPaths = arrowsSvg.querySelectorAll('.arrow-path');
+    allArrowPaths.forEach(a => {
+      const from = a.dataset.from;
+      const to = a.dataset.to;
+      if (from === id || to === id) {
+        a.classList.add('highlighted');
+        a.classList.remove('dimmed');
+        a.style.markerEnd = `url(#${arrowMarkersHl[a.dataset.type]})`;
+        connectedNodes.add(from);
+        connectedNodes.add(to);
+      } else {
+        a.classList.add('dimmed');
+        a.classList.remove('highlighted');
+        a.style.markerEnd = `url(#${arrowMarkers[a.dataset.type]})`;
+      }
+    });
+
+    nodes.forEach(n => {
+      if (connectedNodes.has(n.dataset.id)) {
+        n.classList.remove('dimmed');
+        if (n.dataset.id === id) n.classList.add('highlighted');
+      } else {
+        n.classList.add('dimmed');
+        n.classList.remove('highlighted');
+      }
+    });
+
+    // Show tooltip
+    setTimeout(() => {
+      const badgeLabels = { focal: 'Focal Problem', root: 'Root Cause', mediating: 'Mediating Factor', direct: 'Direct Effect' };
+      const badge = document.getElementById('tooltipBadge');
+      badge.textContent = badgeLabels[info.type] || '';
+      badge.className = 'zoom-tooltip-badge type-' + info.type;
+      document.getElementById('tooltipTitle').textContent = info.title;
+      document.getElementById('tooltipDesc').textContent = info.desc;
+
+      // Position tooltip in viewport space
+      const nodeRect = node.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+
+      let left = nodeRect.right + 16;
+      let top = nodeRect.top;
+
+      // Keep in viewport
+      if (left + 300 > vw) left = nodeRect.left - 316;
+      if (left < 16) left = 16;
+      if (top + 200 > vh) top = vh - 220;
+      if (top < 16) top = 16;
+
+      tooltip.style.left = left + 'px';
+      tooltip.style.top = top + 'px';
+      tooltip.classList.add('visible');
+      tooltipOverlay.classList.add('active');
+    }, 350);
+  });
+});
+
+function closeTooltip() {
+  tooltip.classList.remove('visible');
+  tooltipOverlay.classList.remove('active');
+}
+
+// ===== PAN & ZOOM (free mode) =====
+viewport.addEventListener('mousedown', (e) => {
+  if (mode !== 'free') return;
+  if (e.target.closest('.node') || e.target.closest('.zoom-tooltip') || e.target.closest('button')) return;
+
+  isPanning = true;
+  panStart = { x: e.clientX, y: e.clientY };
+  panStartTransform = { ...currentTransform };
+  canvas.style.transition = 'none';
+});
+
+window.addEventListener('mousemove', (e) => {
+  if (!isPanning) return;
+  const dx = e.clientX - panStart.x;
+  const dy = e.clientY - panStart.y;
+  currentTransform.x = panStartTransform.x + dx;
+  currentTransform.y = panStartTransform.y + dy;
+  applyTransform(false);
+});
+
+window.addEventListener('mouseup', () => {
+  isPanning = false;
+});
+
+viewport.addEventListener('wheel', (e) => {
+  if (mode !== 'free') return;
+  e.preventDefault();
+
+  const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+  const newScale = Math.max(0.3, Math.min(4, currentTransform.scale * zoomFactor));
+
+  // Zoom toward cursor
+  const rect = viewport.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  const wx = (mx - currentTransform.x) / currentTransform.scale;
+  const wy = (my - currentTransform.y) / currentTransform.scale;
+
+  currentTransform.x = mx - wx * newScale;
+  currentTransform.y = my - wy * newScale;
+  currentTransform.scale = newScale;
+
+  canvas.style.transition = 'none';
+  applyTransform(false);
+
+  const isDefault = Math.abs(newScale - baseTransform.scale) < 0.05;
+  resetBtn.classList.toggle('visible', !isDefault);
+}, { passive: false });
+
+// Click on empty space to reset
+viewport.addEventListener('click', (e) => {
+  if (mode !== 'free') return;
+  if (isPanning) return;
+  if (e.target === viewport || e.target === canvas || e.target.closest('.canvas-bg') || e.target.closest('.canvas-grid') || e.target.closest('.orb')) {
+    closeTooltip();
+    clearHighlights();
+    resetView();
+  }
+});
+
+// ===== KEYBOARD =====
+document.addEventListener('keydown', (e) => {
+  if (mode === 'present') {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextStep(); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); prevStep(); }
+    if (e.key === 'Escape') { e.preventDefault(); setMode('free'); }
+  }
+  if (mode === 'free' && e.key === 'Escape') {
+    closeTooltip();
+    clearHighlights();
+    resetView();
+  }
+});
+
+// ===== INIT =====
+function init() {
+  buildProgressDots();
+  baseTransform = computeFitTransform();
+  currentTransform = { ...baseTransform };
+  applyTransform(false);
+  // Render arrows after layout
+  requestAnimationFrame(() => {
+    renderArrows();
+  });
+}
+
+window.addEventListener('resize', () => {
+  baseTransform = computeFitTransform();
+  if (mode === 'free') {
+    currentTransform = { ...baseTransform };
+    applyTransform();
+  } else if (mode === 'present' && currentStep >= 0) {
+    const s = steps[currentStep];
+    focusOnPoint(s.focus.x, s.focus.y, s.focus.scale * baseTransform.scale, true);
+  }
+});
+
+init();
+</script>
+
+</body>
+</html>
