@@ -489,36 +489,38 @@
     margin: 2px 0;
   }
 
-  /* ===== NARRATION PANEL (bottom-center bar) ===== */
+  /* ===== NARRATION PANEL (right sidebar) ===== */
   .narration {
     position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%) translateY(20px);
-    width: 680px;
-    max-width: calc(100vw - 48px);
-    background: rgba(10,11,16,0.92);
+    top: 0;
+    right: 0;
+    width: 340px;
+    height: 100vh;
+    background: rgba(10,11,16,0.95);
     backdrop-filter: blur(24px) saturate(1.4);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 20px;
-    padding: 20px 28px 18px;
+    border-left: 1px solid rgba(255,255,255,0.06);
+    padding: 48px 28px 28px;
     z-index: 150;
     opacity: 0;
+    transform: translateX(40px);
     transition: opacity 0.5s cubic-bezier(0.22, 0.61, 0.36, 1),
                 transform 0.5s cubic-bezier(0.22, 0.61, 0.36, 1);
     pointer-events: none;
-    box-shadow: 0 16px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
+    box-shadow: -12px 0 48px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
   }
   .narration.visible {
     opacity: 1;
-    transform: translateX(-50%) translateY(0);
+    transform: translateX(0);
     pointer-events: auto;
   }
   .narration-header {
     display: flex;
-    align-items: baseline;
-    gap: 14px;
-    margin-bottom: 10px;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 16px;
   }
   .narration-step {
     font-size: 0.58rem;
@@ -530,16 +532,16 @@
     flex-shrink: 0;
   }
   .narration-title {
-    font-size: 0.95rem;
+    font-size: 1rem;
     font-weight: 800;
     color: #e8ecf2;
     line-height: 1.3;
     letter-spacing: -0.02em;
   }
   .narration-text {
-    font-size: 0.75rem;
+    font-size: 0.78rem;
     color: #8694a8;
-    line-height: 1.65;
+    line-height: 1.75;
     font-weight: 400;
   }
   .narration-text em {
@@ -553,8 +555,11 @@
   .nav-buttons {
     display: flex;
     gap: 8px;
-    margin-top: 14px;
-    justify-content: flex-end;
+    margin-top: 20px;
+    justify-content: stretch;
+  }
+  .nav-buttons button {
+    flex: 1;
   }
   .nav-buttons button {
     padding: 9px 28px;
@@ -955,7 +960,7 @@ const steps = [
     text: "Simulan natin sa pinakaugat ng problema. Ang <em>Poverty</em> talaga ang simula ng lahat. Dagdag pa, dahil sa <em>Geographic Isolation</em>, halos hindi naaabot ng tulong ang komunidad. Tapos ang <em>Weak Government Support</em> at <em>Lack of Economic Opportunities</em> — parang walang way out para sa kanila.",
     highlight: ["poverty", "geo", "gov", "econ"],
     arrows: ["poverty-income", "poverty-food", "poverty-econ", "geo-informal", "geo-gov", "geo-sanitation", "gov-econ"],
-    focus: { x: 750, y: 560, scale: 0.82 }
+    focus: { x: 750, y: 480, scale: 0.85 }
   },
   {
     step: "Step 2 of 5",
@@ -987,7 +992,7 @@ const steps = [
     text: "Kapag tiningnan mo ang buong mapa, makikita mo na hindi ito simpleng problema lang. Lahat ng ito ay <em>magkakakonekta</em> — mula sa kahirapan at isolation, hanggang sa malnutrition at kamatayan. Ang bawat problema ay <em>nagpapalala sa isa't isa</em>, at yan ang dahilan kung bakit paulit-ulit itong nangyayari.",
     highlight: ["focal","poverty","geo","gov","econ","income","food","edu","informal","sanitation","malnut","immune","autonomy"],
     arrows: "all",
-    focus: { x: 750, y: 560, scale: 0.82 }
+    focus: { x: 750, y: 480, scale: 0.85 }
   }
 ];
 
@@ -1086,10 +1091,12 @@ function resetView() {
 function focusOnPoint(fx, fy, scale, forPresentation) {
   const vw = viewport.clientWidth;
   const vh = viewport.clientHeight;
-  // In presentation mode, shift center left & up to account for narration panel
   let cx = vw / 2;
   let cy = vh / 2;
-  // No offset needed — narration panel is bottom-center, out of the way
+  // In presentation mode, shift center left to account for right sidebar (340px)
+  if (forPresentation) {
+    cx = (vw - 340) / 2;
+  }
   const tx = cx - fx * scale;
   const ty = cy - fy * scale;
   currentTransform = { x: tx, y: ty, scale };
