@@ -795,7 +795,6 @@
     <!-- NODES -->
     <div class="node focal"     data-id="focal"     data-type="focal"     style="left:625px; top:410px;">Continuous Cycle of<br>Children's Death<br>in Pugad Lawin</div>
 
-    <div class="node root"      data-id="poverty"   data-type="root"      style="left:40px;  top:430px;">Poverty</div>
     <div class="node root"      data-id="geo"       data-type="root"      style="left:1290px;top:430px;">Geographic<br>Isolation</div>
     <div class="node root"      data-id="econ"      data-type="root"      style="left:355px; top:840px;">Lack of Economic<br>Opportunities</div>
     <div class="node root"      data-id="gov"       data-type="root"      style="left:970px; top:840px;">Weak Government<br>Support</div>
@@ -888,11 +887,10 @@ let isAnimating = false;
 // ===== NODE INFO =====
 const nodeInfo = {
   focal:    { title: "Focal Problem", type: "focal", desc: "This is the heart of the problem — children in Pugad Lawin keep dying, and it happens over and over again. Kids like Ashley lose their lives to things that should be preventable, all because the system around them has failed." },
-  poverty:  { title: "Poverty", type: "root", desc: "Everything starts here. The families in Pugad Lawin are extremely poor — we're talking about not being able to put food on the table, see a doctor, or even have a proper roof over their heads." },
   geo:      { title: "Geographic Isolation", type: "root", desc: "Pugad Lawin is tucked away in a place that's really hard to get to. Because of that, the people there are cut off from hospitals, government programs, and any real chance at a livelihood." },
   gov:      { title: "Weak Government Support", type: "root", desc: "The government barely reaches this community. There are no feeding programs, no proper health centers nearby, and the infrastructure is almost nonexistent." },
-  econ:     { title: "Lack of Economic Opportunities", type: "root", desc: "There's simply no steady work available. Parents can't find decent jobs, so the poverty just keeps going in circles with no way out." },
-  income:   { title: "Insufficient Income", type: "mediating", desc: "With no real jobs and deep poverty, these families barely scrape by. What little they earn isn't nearly enough for nutritious food or a trip to the doctor." },
+  econ:     { title: "Lack of Economic Opportunities", type: "root", desc: "There's simply no steady work available. Parents can't find decent jobs, so the hardship just keeps going in circles with no way out." },
+  income:   { title: "Insufficient Income", type: "mediating", desc: "With no real jobs and so few opportunities, these families barely scrape by. What little they earn isn't nearly enough for nutritious food or a trip to the doctor." },
   edu:      { title: "Limited Health & Family Planning Education", type: "mediating", desc: "Many parents don't have access to information about proper child nutrition, hygiene, or family planning. They end up with large families they struggle to feed and care for." },
   informal: { title: "Living in Informal Settlements", type: "mediating", desc: "These families live in makeshift homes — no clean water, no proper toilets, no real protection from the elements. It's not a safe place to raise children." },
   sanitation:{ title: "Poor Environmental Sanitation", type: "mediating", desc: "The surroundings are unsanitary — open sewage, dirty water, trash everywhere. For children who are already malnourished, this kind of environment is a death trap." },
@@ -905,9 +903,6 @@ const nodeInfo = {
 // ===== CONNECTIONS =====
 const connections = [
   // Root cause links (indigo)
-  { from: 'poverty', to: 'income',     type: 'root',      curve: 0.18 },
-  { from: 'poverty', to: 'food',       type: 'root',      curve: -0.18 },
-  { from: 'poverty', to: 'econ',       type: 'root',      curve: 0.12 },
   { from: 'econ',    to: 'income',     type: 'root',      curve: -0.12 },
   { from: 'econ',    to: 'food',       type: 'root',      curve: 0.15 },
   { from: 'geo',     to: 'informal',   type: 'root',      curve: -0.18 },
@@ -966,9 +961,9 @@ const steps = [
   {
     step: "Step 1 of 5",
     title: "Root Causes — Ang Pinakaugat",
-    text: "Simulan natin sa pinakaugat ng problema. Ang <em>Poverty</em> talaga ang simula ng lahat. Dagdag pa, dahil sa <em>Geographic Isolation</em>, halos hindi naaabot ng tulong ang komunidad. Tapos ang <em>Weak Government Support</em> at <em>Lack of Economic Opportunities</em> — parang walang way out para sa kanila.",
-    highlight: ["poverty", "geo", "gov", "econ"],
-    arrows: ["poverty-income", "poverty-food", "poverty-econ", "geo-informal", "geo-gov", "geo-sanitation", "gov-econ"],
+    text: "Simulan natin sa pinakaugat ng problema. Dahil sa <em>Geographic Isolation</em>, halos hindi naaabot ng tulong ang komunidad. Ang <em>Weak Government Support</em> at <em>Lack of Economic Opportunities</em> ang nagpapanatili ng kahirapan — parang walang way out para sa kanila.",
+    highlight: ["geo", "gov", "econ"],
+    arrows: ["geo-informal", "geo-gov", "geo-sanitation", "gov-econ"],
     focus: { x: 750, y: 480, scale: 0.85 }
   },
   {
@@ -999,7 +994,7 @@ const steps = [
     step: "Step 5 of 5",
     title: "Ang Buong Larawan — Isang Cycle",
     text: "Kapag tiningnan mo ang buong mapa, makikita mo na hindi ito simpleng problema lang. Lahat ng ito ay <em>magkakakonekta</em> — mula sa kahirapan at isolation, hanggang sa malnutrition at kamatayan. Ang bawat problema ay <em>nagpapalala sa isa't isa</em>, at yan ang dahilan kung bakit paulit-ulit itong nangyayari.",
-    highlight: ["focal","poverty","geo","gov","econ","income","food","edu","informal","sanitation","malnut","immune","autonomy"],
+    highlight: ["focal","geo","gov","econ","income","food","edu","informal","sanitation","malnut","immune","autonomy"],
     arrows: "all",
     focus: { x: 750, y: 480, scale: 0.85 }
   }
