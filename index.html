@@ -494,12 +494,12 @@
     position: fixed;
     top: 0;
     right: 0;
-    width: 340px;
+    width: 360px;
     height: 100vh;
-    background: rgba(10,11,16,0.95);
-    backdrop-filter: blur(24px) saturate(1.4);
+    background: rgba(8,9,14,0.97);
+    backdrop-filter: blur(30px) saturate(1.5);
     border-left: 1px solid rgba(255,255,255,0.06);
-    padding: 48px 28px 28px;
+    padding: 0;
     z-index: 150;
     opacity: 0;
     transform: translateX(40px);
@@ -509,18 +509,26 @@
     box-shadow: -12px 0 48px rgba(0,0,0,0.5);
     display: flex;
     flex-direction: column;
-    justify-content: center;
   }
   .narration.visible {
     opacity: 1;
     transform: translateX(0);
     pointer-events: auto;
   }
+  .narration-inner {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 40px 32px;
+  }
   .narration-header {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    margin-bottom: 16px;
+    gap: 8px;
+    margin-bottom: 20px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
   }
   .narration-step {
     font-size: 0.58rem;
@@ -555,14 +563,13 @@
   .nav-buttons {
     display: flex;
     gap: 8px;
-    margin-top: 20px;
-    justify-content: stretch;
+    padding: 20px 32px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    background: rgba(6,7,12,0.6);
   }
   .nav-buttons button {
     flex: 1;
-  }
-  .nav-buttons button {
-    padding: 9px 28px;
+    padding: 11px 20px;
     border-radius: 10px;
     border: 1px solid rgba(255,255,255,0.06);
     background: rgba(255,255,255,0.04);
@@ -826,11 +833,13 @@
 
 <!-- Narration panel (bottom-center) -->
 <div class="narration" id="narration">
-  <div class="narration-header">
-    <div class="narration-step" id="narrationStep"></div>
-    <div class="narration-title" id="narrationTitle"></div>
+  <div class="narration-inner">
+    <div class="narration-header">
+      <div class="narration-step" id="narrationStep"></div>
+      <div class="narration-title" id="narrationTitle"></div>
+    </div>
+    <div class="narration-text" id="narrationText"></div>
   </div>
-  <div class="narration-text" id="narrationText"></div>
   <div class="nav-buttons">
     <button onclick="prevStep()">Back</button>
     <button class="primary" onclick="nextStep()">Next</button>
@@ -1093,9 +1102,9 @@ function focusOnPoint(fx, fy, scale, forPresentation) {
   const vh = viewport.clientHeight;
   let cx = vw / 2;
   let cy = vh / 2;
-  // In presentation mode, shift center left to account for right sidebar (340px)
+  // In presentation mode, shift center left to account for right sidebar (360px)
   if (forPresentation) {
-    cx = (vw - 340) / 2;
+    cx = (vw - 360) / 2;
   }
   const tx = cx - fx * scale;
   const ty = cy - fy * scale;
